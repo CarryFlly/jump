@@ -118,8 +118,11 @@
   let W, H, dpr;
   let score = 0;
   let state = 'idle';        // idle | charging | jumping | falling
-  let cameraY = 0;           // 相机上移量
+  let cameraX = 0;           // 相机水平偏移
+  let cameraY = 0;           // 相机垂直偏移
   let lastTime = 0;
+  const CENTER_Y = 0.45;     // 角色在画面中的垂直位置（0=顶部 1=底部）
+  const CAM_SPEED = 8;       // 相机跟随速度（越大跟得越快）
 
   // 当前落脚块
   let current = null;
@@ -161,7 +164,6 @@
 
   function resetWorld() {
     score = 0;
-    cameraY = 0;
     const bw = 80 * scale, bh = 80 * scale;
     current = makeBlock((W - bw) / 2, H - 320 * scale, bw, bh);
     spawnNext();
@@ -175,6 +177,9 @@
     hero.vx = 0; hero.vy = 0;
     state = 'idle';
     scoreEl.textContent = '0';
+    // 开局相机直接对准角色中心，避免初始跳动
+    cameraX = hero.x + hero.w / 2 - W / 2;
+    cameraY = hero.y + hero.h / 2 - H * CENTER_Y;
   }
 
   // 生成下一个目标块，放到当前块的上方随机侧
@@ -241,18 +246,20 @@
       }
     }
 
-    // 相机跟随（向上）
-    if (current && current.y < H * 0.3) {
-      const shift = H * 0.3 - current.y;
-      cameraY += shift;
-      current.y += shift;
-      next.y += shift;
-      hero.y += shift;
-      hero.baseY += shift;
-    }
+    // 相机平滑跟随角色中心
+    updateCamera(dt);
 
     draw();
     requestAnimationFrame(loop);
+  }
+
+  // 相机平滑插值，把角色保持在画面中心附近
+  function updateCamera(dt) {
+    const tx = hero.x + hero.w / 2 - W / 2;       // 目标：角色水平居中
+    const ty = hero.y + hero.h / 2 - H * CENTER_Y; // 目标：角色在垂直 45% 处
+    const k = 1 - Math.exp(-CAM_SPEED * dt);       // 指数缓动系数（帧率无关）
+    cameraX += (tx - cameraX) * k;
+    cameraY += (ty - cameraY) * k;
   }
 
   // 脚底是否在从 prevFeet 下落到 feet 的过程中穿过方块顶面，且水平投影与块有重叠
@@ -387,18 +394,22 @@
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    // 地面网格
+    ctx.save();
+    // 应用相机偏移：把世界坐标转换为屏幕坐标
+    ctx.translate(-cameraX, -cameraY);
+    // 地面网格（按可见范围绘制，跟随镜头）
     ctx.strokeStyle = 'rgba(0,0,0,0.04)';
     ctx.lineWidth = 1;
-    for (let i = 0; i < W / 60 + 1; i++) {
-      ctx.beginPath(); ctx.moveTo(i * 60, 0); ctx.lineTo(i * 60, H); ctx.stroke();
+    const gx0 = Math.floor(cameraX / 60) * 60;
+    for (let gx = gx0; gx <= cameraX + W; gx += 60) {
+      ctx.beginPath(); ctx.moveTo(gx, cameraY); ctx.lineTo(gx, cameraY + H); ctx.stroke();
     }
-
     if (current) drawBlock(current);
     if (next) drawBlock(next);
     if (state !== 'gameover') drawHero();
+    ctx.restore();
 
-    // 蓄力条
+    // 蓄力条（固定屏幕坐标，不随镜头移动）
     if (state === 'charging') {
       const barW = 120, barH = 8;
       const bx = (W - barW) / 2, by = H - 50;
