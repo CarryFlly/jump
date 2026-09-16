@@ -273,7 +273,8 @@
 
   function landOn(b, addScore) {
     current = b;
-    hero.x = b.x + b.w / 2 - hero.w / 2;
+    // 保留实际落点，不吸附到方块中心（只稍微收拢，避免角色挂在块边缘外）
+    hero.x = Math.max(b.x, Math.min(hero.x, b.x + b.w - hero.w));
     hero.y = b.y - hero.h;
     hero.grounded = true;
     hero.vx = 0; hero.vy = 0;
