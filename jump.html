@@ -166,11 +166,11 @@
     score = 0;
     const bw = 65 * scale, bh = 72 * scale;
     current = makeBlock((W - bw) / 2, H - 320 * scale, bw, bh);
-    spawnNext();
     // 角色站在当前块上
     hero.w = 40 * scale; hero.h = 44 * scale;
     hero.x = current.x + current.w / 2 - hero.w / 2;
     hero.y = current.y - hero.h;
+    spawnNext();   // 需在角色位置确定后再生成下一块
     hero.grounded = true;
     hero.charging = false;
     hero.power = 0;
@@ -182,15 +182,16 @@
     cameraY = hero.y + hero.h / 2 - H * CENTER_Y;
   }
 
-  // 生成下一个目标块，放到当前块的上方随机侧
+  // 生成下一个目标块，放到角色实际落点的上方随机侧
   function spawnNext() {
     const w = (75 + Math.random() * 40) * scale;   // 更小的方块
     const h = (50 + Math.random() * 30) * scale;
-    // 侧向偏移（随方块变小略微收紧）
+    // 侧向偏移（以角色实际落点中心为基准）
     const offset = (65 + Math.random() * 55) * scale;
     const side = Math.random() < 0.5 ? -1 : 1;
     const gap = (28 + Math.random() * 28) * scale;
-    const nx = current.x + side * offset + (Math.random() * 40 - 20) * scale;
+    const hc = hero.x + hero.w / 2;                 // 角色中心（实际落点）
+    const nx = hc + side * offset + (Math.random() * 40 - 20) * scale;
     const ny = current.y - gap - h + (Math.random() * 30 - 15) * scale;
     next = makeBlock(nx, ny, w, h);
   }
@@ -273,8 +274,7 @@
 
   function landOn(b, addScore) {
     current = b;
-    // 保留实际落点，不吸附到方块中心（只稍微收拢，避免角色挂在块边缘外）
-    hero.x = Math.max(b.x, Math.min(hero.x, b.x + b.w - hero.w));
+    // 完全保留实际落点：即使角色几乎悬在方块外也直接停在这个位置，不做任何收拢/吸附
     hero.y = b.y - hero.h;
     hero.grounded = true;
     hero.vx = 0; hero.vy = 0;
