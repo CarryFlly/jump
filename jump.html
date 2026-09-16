@@ -5,13 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>跳一跳 Jump Jump</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     height: 100%;
+    height: 100dvh;                /* 兼容手机浏览器地址栏弹出 */
     background: #f5f6fa;
     font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
     overflow: hidden;
+    overscroll-behavior: none;
     touch-action: none;
+    position: fixed;               /* 防 iOS 橡皮筋回弹 */
+    inset: 0;
+    width: 100%;
   }
   #game {
     display: block;
@@ -133,11 +138,21 @@
     baseY: 0                 // 起跳时地面高度
   };
 
-  // 跳跃的物理参数
-  const GRAVITY = 3200;       // px/s^2
-  const JUMP_SPEED = 1400;    // 固定跳跃高度初速 y (px/s)
+  // 跳跃的物理参数（基准值，会乘上屏幕缩放 scale）
+  const BASE_GRAVITY = 3200;   // px/s^2
+  const BASE_JUMP_SPEED = 1400; // 固定跳跃高度初速 y (px/s)
+  const BASE_VX = 80;          // 最小水平初速系数
+  const BASE_VX_RANGE = 114;   // 蓄力水平距离系数
   const MAX_POWER = 1.0;
-  const CHARGE_RATE = 1.6;    // 蓄力速度 (每秒满)
+  const CHARGE_RATE = 1.6;     // 蓄力速度 (每秒满)
+
+  // 屏幕缩放：以 400px 参考宽度为基准，窄屏缩小、宽屏放大
+  const REF_W = 400;
+  let scale = 1;
+  let GRAVITY = BASE_GRAVITY;
+  let JUMP_SPEED = BASE_JUMP_SPEED;
+  let VX = BASE_VX;
+  let VX_RANGE = BASE_VX_RANGE;
 
   // ---------- 方块 ----------
   function makeBlock(x, y, w, h) {
@@ -147,11 +162,11 @@
   function resetWorld() {
     score = 0;
     cameraY = 0;
-    const bw = 80, bh = 80;
-    current = makeBlock((W - bw) / 2, H - 320, bw, bh);
+    const bw = 80 * scale, bh = 80 * scale;
+    current = makeBlock((W - bw) / 2, H - 320 * scale, bw, bh);
     spawnNext();
     // 角色站在当前块上
-    hero.w = 40; hero.h = 44;
+    hero.w = 40 * scale; hero.h = 44 * scale;
     hero.x = current.x + current.w / 2 - hero.w / 2;
     hero.y = current.y - hero.h;
     hero.grounded = true;
@@ -164,14 +179,14 @@
 
   // 生成下一个目标块，放到当前块的上方随机侧
   function spawnNext() {
-    const w = 100 + Math.random() * 55;   // 更宽的方块
-    const h = 60 + Math.random() * 45;
+    const w = (100 + Math.random() * 55) * scale;   // 更宽的方块
+    const h = (60 + Math.random() * 45) * scale;
     // 侧向偏移（更近，跳跃距离更小）
-    const offset = 70 + Math.random() * 65;
+    const offset = (70 + Math.random() * 65) * scale;
     const side = Math.random() < 0.5 ? -1 : 1;
-    const gap = 30 + Math.random() * 30;
-    const nx = current.x + side * offset + (Math.random() * 40 - 20);
-    const ny = current.y - gap - h + (Math.random() * 30 - 15);
+    const gap = (30 + Math.random() * 30) * scale;
+    const nx = current.x + side * offset + (Math.random() * 40 - 20) * scale;
+    const ny = current.y - gap - h + (Math.random() * 30 - 15) * scale;
     next = makeBlock(nx, ny, w, h);
   }
 
@@ -185,6 +200,12 @@
     canvas.style.width = W + 'px';
     canvas.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 按屏幕宽度计算缩放，并等比调整物理参数
+    scale = Math.max(0.6, Math.min(1.5, W / REF_W));
+    GRAVITY = BASE_GRAVITY * scale;
+    JUMP_SPEED = BASE_JUMP_SPEED * scale;
+    VX = BASE_VX * scale;
+    VX_RANGE = BASE_VX_RANGE * scale;
     if (state === 'idle' && current && next) {
       // 重置世界放到视口内
       resetWorld();
@@ -290,7 +311,7 @@
       const dir = next.x + next.w / 2 - (hero.x + hero.w / 2);
       const s = Math.sign(dir) || 1;
       // 跳跃高度固定，水平距离随蓄力线性变化，更好控制
-      hero.vx = s * (80 + 114 * p);
+      hero.vx = s * (VX + VX_RANGE * p);
       hero.vy = -JUMP_SPEED;
       hero.baseY = hero.y + hero.h;   // 记录起跳地面
       hero.grounded = false;
